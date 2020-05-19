@@ -48,14 +48,14 @@ func (c *CoordinatorImpl) Keygen(clientID string) (crypto.PublicKey, error) {
 
 	// get all peers Ai
 	for _, p := range c.peers {
-		go func() {
+		go func(p Peer) {
 			Ai, err := p.Ai(clientID)
 			if err != nil {
 				errors <- err
 				return
 			}
 			AA <- *Ai
-		}()
+		}(p)
 	}
 
 	var A internal.ExtendedGroupElement
@@ -92,18 +92,20 @@ func (c *CoordinatorImpl) Sign(clientID string, message []byte) (crypto.Signatur
 	var R internal.ExtendedGroupElement
 	RR := make(chan internal.ExtendedGroupElement)
 	for _, p := range c.peers {
-		go func() {
+		go func(p Peer) {
+			fmt.Println("p, %v", p)
 			Ri, err := p.Ri(clientID, sessionID, message)
 			if err != nil {
 				errors <- err
 				return
 			}
 			RR <- *Ri
-		}()
+		}(p)
 	}
 	for range c.peers {
 		select {
 		case Ri := <-RR:
+			fmt.Println("Got Ri, %v", Ri)
 			internal.GeAdd(&R, &R, &Ri)
 		case err := <-errors:
 			return signature, err
@@ -119,25 +121,26 @@ func (c *CoordinatorImpl) Sign(clientID string, message []byte) (crypto.Signatur
 	var S internal.FieldElement
 	SS := make(chan internal.FieldElement)
 	for _, p := range c.peers {
-		go func() {
+		go func(p Peer) {
 			Si, err := p.Si(clientID, sessionID, k)
 			if err != nil {
 				errors <- err
 				return
 			}
 			SS <- *Si
-		}()
+		}(p)
 	}
 	for range c.peers {
 		select {
 		case Si := <-SS:
+			fmt.Println("Got Si, %v", Si)
 			internal.FeAdd(&S, &S, &Si)
 		case err := <-errors:
 			return signature, err
 		}
 	}
 
-	// serialize R, S to bytes
+	// serialize R, S to bytes — ed25519 signature
 	var RByte, SByte [32]byte
 	R.ToBytes(&RByte)
 	internal.FeToBytes(&SByte, &S)
@@ -148,6 +151,7 @@ func (c *CoordinatorImpl) Sign(clientID string, message []byte) (crypto.Signatur
 	var publicKeyEd = new([crypto.PublicKeySize]byte)
 	A.ToBytes(publicKeyEd)
 	signBit := publicKeyEd[31] & 0x80
+
 	signature[63] &= 0x7f
 	signature[63] |= signBit
 
