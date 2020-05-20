@@ -145,36 +145,35 @@ func main() {
 	message = append(message, 1, 1, 1, 1)
 
 	sk1, _ := randomKey()
-	// sk2, _ := RandomKey()
+	sk2, _ := randomKey()
 
 	// calculate A, ed25519 pub key
-	var /* A1 A2,*/ A cryptobase.ExtendedGroupElement
-	// cryptobase.GeScalarMultBase(&A1, &sk2)
-	// cryptobase.GeScalarMultBase(&A2, &sk2)
-	cryptobase.GeScalarMultBase(&A, &sk1)
-	// cryptobase.GeAdd(&A, &A1, &A2)
+	var A1, A2, A cryptobase.ExtendedGroupElement
+	cryptobase.GeScalarMultBase(&A1, &sk1)
+	cryptobase.GeScalarMultBase(&A2, &sk2)
+	cryptobase.GeAdd(&A, &A1, &A2)
 
 	// generate Ri, ri
 	R1, r1, _ := CalcR(&sk1, message)
-	// rr2, _ := CalcRR(&sk2, message)
+	R2, r2, _ := CalcR(&sk2, message)
 
+	// sum Ri to get R
 	var R cryptobase.ExtendedGroupElement
-	R = R1
-	// cryptobase.GeAdd(&R, &R1, &R2)
+	cryptobase.GeAdd(&R, &R1, &R2)
 
 	k, _ := CalcK(&R, &A, message)
 
 	S1 := CalcS(&k, &sk1, &r1)
-	// S2 := CalcS(&k, &sk2, &rr2.RSecret)
+	S2 := CalcS(&k, &sk2, &r2)
 
-	S := SumFE(S1)
+	S := SumFE(S1, S2)
 
 	signatureCurve := CurveSigFromEd(&A, &R, &S)
 	publicKeyCurve := CurvePKFromEdPK(&A)
 
 	if crypto.Verify(publicKeyCurve, signatureCurve, message) {
-		println("Signature verified.")
+		println("Success")
 	} else {
-		println("Verification failed.")
+		println("Fail")
 	}
 }
