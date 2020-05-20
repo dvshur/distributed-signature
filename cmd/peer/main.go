@@ -1,16 +1,16 @@
 package main
 
 import (
-	"github.com/dvshur/distributed-signature/pkg/aggsig"
 	"github.com/dvshur/distributed-signature/pkg/crypto"
+	"github.com/dvshur/distributed-signature/pkg/peer"
 )
 
 func main() {
-	p1 := aggsig.NewLocalPeer()
-	// p2 := aggsig.NewLocalPeer()
-	// p3 := aggsig.NewLocalPeer()
+	p1 := peer.NewLocalPeer()
+	p2 := peer.NewLocalPeer()
+	// p3 := peer.NewLocalPeer()
 
-	c := aggsig.NewCoordinator([]aggsig.Peer{p1})
+	c := peer.NewCoordinator([]peer.Peer{p1, p2})
 
 	clientID := "vasya"
 

@@ -1,4 +1,4 @@
-package aggsig
+package peer
 
 import (
 	"crypto/sha512"
