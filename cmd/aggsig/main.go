@@ -5,9 +5,8 @@ import (
 	"crypto/rand"
 	"crypto/sha512"
 
-	"github.com/dvshur/distributed-signature/crypto/internal"
-
-	"github.com/wavesplatform/gowaves/pkg/crypto"
+	"github.com/dvshur/distributed-signature/pkg/crypto"
+	"github.com/dvshur/distributed-signature/pkg/cryptobase"
 )
 
 func randomKey() ([crypto.SecretKeySize]byte, error) {
@@ -22,8 +21,8 @@ func randomKey() ([crypto.SecretKeySize]byte, error) {
 }
 
 // CalcR, returns ri, Ri, error
-func CalcR(sk *[32]byte, data []byte) (internal.ExtendedGroupElement, [32]byte, error) {
-	var R internal.ExtendedGroupElement
+func CalcR(sk *[32]byte, data []byte) (cryptobase.ExtendedGroupElement, [32]byte, error) {
+	var R cryptobase.ExtendedGroupElement
 	var r [32]byte
 
 	var prefix = bytes.Repeat([]byte{0xff}, 32)
@@ -51,14 +50,14 @@ func CalcR(sk *[32]byte, data []byte) (internal.ExtendedGroupElement, [32]byte, 
 	}
 	h.Sum(rHash[:0])
 
-	internal.ScReduce(&r, &rHash)
-	internal.GeScalarMultBase(&R, &r)
+	cryptobase.ScReduce(&r, &rHash)
+	cryptobase.GeScalarMultBase(&R, &r)
 
 	return R, r, nil
 }
 
 // CalcK ..
-func CalcK(R, A *internal.ExtendedGroupElement, data []byte) ([32]byte, error) {
+func CalcK(R, A *cryptobase.ExtendedGroupElement, data []byte) ([32]byte, error) {
 	var edPublicKey = new([crypto.PublicKeySize]byte)
 	A.ToBytes(edPublicKey)
 
@@ -79,36 +78,36 @@ func CalcK(R, A *internal.ExtendedGroupElement, data []byte) ([32]byte, error) {
 		return k, err
 	}
 	h.Sum(kHash[:0])
-	internal.ScReduce(&k, &kHash)
+	cryptobase.ScReduce(&k, &kHash)
 
 	return k, nil
 }
 
 // CalcS ..
-func CalcS(k, si, ri *[32]byte) *internal.FieldElement {
+func CalcS(k, si, ri *[32]byte) *cryptobase.FieldElement {
 	var s [32]byte
-	internal.ScMulAdd(&s, k, si, ri)
+	cryptobase.ScMulAdd(&s, k, si, ri)
 
-	var S internal.FieldElement
-	internal.FeFromBytes(&S, &s)
+	var S cryptobase.FieldElement
+	cryptobase.FeFromBytes(&S, &s)
 
 	return &S
 }
 
 // CreateSig ..
-func CreateSig(R *internal.ExtendedGroupElement, Ss ...*internal.FieldElement) crypto.Signature {
+func CreateSig(R *cryptobase.ExtendedGroupElement, Ss ...*cryptobase.FieldElement) crypto.Signature {
 	var signature [64]byte
 
 	// calc S = S0 + ... + Sn
-	var S internal.FieldElement
+	var S cryptobase.FieldElement
 	for _, Si := range Ss {
-		internal.FeAdd(&S, &S, Si)
+		cryptobase.FeAdd(&S, &S, Si)
 	}
 
 	// serialize sig to bytes
 	var RByte, SByte [32]byte
 	R.ToBytes(&RByte)
-	internal.FeToBytes(&SByte, &S)
+	cryptobase.FeToBytes(&SByte, &S)
 
 	copy(signature[:], RByte[:])
 	copy(signature[32:], SByte[:])
@@ -116,18 +115,18 @@ func CreateSig(R *internal.ExtendedGroupElement, Ss ...*internal.FieldElement) c
 	return signature
 }
 
-func CurvePKFromEdPK(ed *internal.ExtendedGroupElement) crypto.PublicKey {
+func CurvePKFromEdPK(ed *cryptobase.ExtendedGroupElement) crypto.PublicKey {
 	var pk crypto.PublicKey
-	var edYPlusOne = new(internal.FieldElement)
-	internal.FeAdd(edYPlusOne, &ed.Y, &ed.Z)
-	var oneMinusEdY = new(internal.FieldElement)
-	internal.FeSub(oneMinusEdY, &ed.Z, &ed.Y)
-	var invOneMinusEdY = new(internal.FieldElement)
-	internal.FeInvert(invOneMinusEdY, oneMinusEdY)
-	var montX = new(internal.FieldElement)
-	internal.FeMul(montX, edYPlusOne, invOneMinusEdY)
+	var edYPlusOne = new(cryptobase.FieldElement)
+	cryptobase.FeAdd(edYPlusOne, &ed.Y, &ed.Z)
+	var oneMinusEdY = new(cryptobase.FieldElement)
+	cryptobase.FeSub(oneMinusEdY, &ed.Z, &ed.Y)
+	var invOneMinusEdY = new(cryptobase.FieldElement)
+	cryptobase.FeInvert(invOneMinusEdY, oneMinusEdY)
+	var montX = new(cryptobase.FieldElement)
+	cryptobase.FeMul(montX, edYPlusOne, invOneMinusEdY)
 	p := new([crypto.PublicKeySize]byte)
-	internal.FeToBytes(p, montX)
+	cryptobase.FeToBytes(p, montX)
 	copy(pk[:], p[:])
 	return pk
 }
@@ -140,19 +139,19 @@ func main() {
 	// sk2, _ := RandomKey()
 
 	// calculate A, ed25519 pub key
-	var /* A1 A2,*/ A internal.ExtendedGroupElement
-	// internal.GeScalarMultBase(&A1, &sk2)
-	// internal.GeScalarMultBase(&A2, &sk2)
-	internal.GeScalarMultBase(&A, &sk1)
-	// internal.GeAdd(&A, &A1, &A2)
+	var /* A1 A2,*/ A cryptobase.ExtendedGroupElement
+	// cryptobase.GeScalarMultBase(&A1, &sk2)
+	// cryptobase.GeScalarMultBase(&A2, &sk2)
+	cryptobase.GeScalarMultBase(&A, &sk1)
+	// cryptobase.GeAdd(&A, &A1, &A2)
 
 	// generate Ri, ri
 	R1, r1, _ := CalcR(&sk1, message)
 	// rr2, _ := CalcRR(&sk2, message)
 
-	var R internal.ExtendedGroupElement
+	var R cryptobase.ExtendedGroupElement
 	R = R1
-	// internal.GeAdd(&R, &R1, &R2)
+	// cryptobase.GeAdd(&R, &R1, &R2)
 
 	k, _ := CalcK(&R, &A, message)
 

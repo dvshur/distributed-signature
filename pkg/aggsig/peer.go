@@ -7,21 +7,20 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/dvshur/distributed-signature/crypto"
-
-	"github.com/dvshur/distributed-signature/crypto/internal"
+	"github.com/dvshur/distributed-signature/pkg/crypto"
+	"github.com/dvshur/distributed-signature/pkg/cryptobase"
 )
 
 // Peer ..
 type Peer interface {
-	Ai(clientID string) (*internal.ExtendedGroupElement, error)
-	Ri(clientID string, sessionID string, message []byte) (*internal.ExtendedGroupElement, error)
-	Si(clientID string, sessionID string, k [32]byte) (*internal.FieldElement, error)
+	Ai(clientID string) (*cryptobase.ExtendedGroupElement, error)
+	Ri(clientID string, sessionID string, message []byte) (*cryptobase.ExtendedGroupElement, error)
+	Si(clientID string, sessionID string, k [32]byte) (*cryptobase.FieldElement, error)
 }
 
 type keyPair struct {
 	SecretKey [32]byte
-	Ai        internal.ExtendedGroupElement
+	Ai        cryptobase.ExtendedGroupElement
 }
 
 // PeerLocal ..
@@ -41,7 +40,7 @@ func NewLocalPeer() Peer {
 }
 
 // Ai ..
-func (p *PeerLocal) Ai(clientID string) (*internal.ExtendedGroupElement, error) {
+func (p *PeerLocal) Ai(clientID string) (*cryptobase.ExtendedGroupElement, error) {
 	p.mux.RLock()
 	kp, ok := p.keys[clientID]
 	p.mux.RUnlock()
@@ -58,8 +57,8 @@ func (p *PeerLocal) Ai(clientID string) (*internal.ExtendedGroupElement, error) 
 	}
 	sk := [32]byte(crypto.GenerateSecretKey(seed))
 
-	var Ai internal.ExtendedGroupElement
-	internal.GeScalarMultBase(&Ai, &sk)
+	var Ai cryptobase.ExtendedGroupElement
+	cryptobase.GeScalarMultBase(&Ai, &sk)
 
 	kp.Ai = Ai
 	kp.SecretKey = sk
@@ -68,13 +67,11 @@ func (p *PeerLocal) Ai(clientID string) (*internal.ExtendedGroupElement, error) 
 	p.keys[clientID] = kp
 	p.mux.Unlock()
 
-	fmt.Printf("Ai: %v, sk: %v\n", kp.Ai, kp.SecretKey)
-
 	return &Ai, nil
 }
 
 // Ri ..
-func (p *PeerLocal) Ri(clientID string, sessionID string, message []byte) (*internal.ExtendedGroupElement, error) {
+func (p *PeerLocal) Ri(clientID string, sessionID string, message []byte) (*cryptobase.ExtendedGroupElement, error) {
 	p.mux.RLock()
 	kp, clientExists := p.keys[clientID]
 	p.mux.RUnlock()
@@ -113,7 +110,7 @@ func (p *PeerLocal) Ri(clientID string, sessionID string, message []byte) (*inte
 		}
 		h.Sum(rHash[:0])
 
-		internal.ScReduce(&ri, &rHash)
+		cryptobase.ScReduce(&ri, &rHash)
 
 		p.mux.Lock()
 		p.sessionsRi[sessionID] = ri
@@ -122,14 +119,14 @@ func (p *PeerLocal) Ri(clientID string, sessionID string, message []byte) (*inte
 		// todo set a goroutine for deleting
 	}
 
-	var Ri internal.ExtendedGroupElement
-	internal.GeScalarMultBase(&Ri, &ri)
+	var Ri cryptobase.ExtendedGroupElement
+	cryptobase.GeScalarMultBase(&Ri, &ri)
 
 	return &Ri, nil
 }
 
 // Si ..
-func (p *PeerLocal) Si(clientID string, sessionID string, k [32]byte) (*internal.FieldElement, error) {
+func (p *PeerLocal) Si(clientID string, sessionID string, k [32]byte) (*cryptobase.FieldElement, error) {
 	p.mux.RLock()
 	kp, clientExists := p.keys[clientID]
 	p.mux.RUnlock()
@@ -146,10 +143,10 @@ func (p *PeerLocal) Si(clientID string, sessionID string, k [32]byte) (*internal
 	}
 
 	var s [32]byte
-	internal.ScMulAdd(&s, &k, &kp.SecretKey, &ri)
+	cryptobase.ScMulAdd(&s, &k, &kp.SecretKey, &ri)
 
-	var S internal.FieldElement
-	internal.FeFromBytes(&S, &s)
+	var S cryptobase.FieldElement
+	cryptobase.FeFromBytes(&S, &s)
 
 	return &S, nil
 }

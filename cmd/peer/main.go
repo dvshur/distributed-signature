@@ -1,9 +1,8 @@
 package main
 
 import (
-	"github.com/dvshur/distributed-signature/crypto/aggsig"
-
-	"github.com/wavesplatform/gowaves/pkg/crypto"
+	"github.com/dvshur/distributed-signature/pkg/aggsig"
+	"github.com/dvshur/distributed-signature/pkg/crypto"
 )
 
 func main() {

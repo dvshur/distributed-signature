@@ -9,8 +9,7 @@ import (
 	"hash"
 	"strings"
 
-	"github.com/dvshur/distributed-signature/crypto/internal"
-
+	"github.com/dvshur/distributed-signature/pkg/cryptobase"
 	"github.com/mr-tron/base58/base58"
 	"github.com/pkg/errors"
 	"github.com/wavesplatform/gowaves/pkg/util/common"
@@ -363,18 +362,18 @@ func GenerateSecretKey(seed []byte) SecretKey {
 func GeneratePublicKey(sk SecretKey) PublicKey {
 	var pk PublicKey
 	s := [SecretKeySize]byte(sk)
-	var ed internal.ExtendedGroupElement
-	internal.GeScalarMultBase(&ed, &s)
-	var edYPlusOne = new(internal.FieldElement)
-	internal.FeAdd(edYPlusOne, &ed.Y, &ed.Z)
-	var oneMinusEdY = new(internal.FieldElement)
-	internal.FeSub(oneMinusEdY, &ed.Z, &ed.Y)
-	var invOneMinusEdY = new(internal.FieldElement)
-	internal.FeInvert(invOneMinusEdY, oneMinusEdY)
-	var montX = new(internal.FieldElement)
-	internal.FeMul(montX, edYPlusOne, invOneMinusEdY)
+	var ed cryptobase.ExtendedGroupElement
+	cryptobase.GeScalarMultBase(&ed, &s)
+	var edYPlusOne = new(cryptobase.FieldElement)
+	cryptobase.FeAdd(edYPlusOne, &ed.Y, &ed.Z)
+	var oneMinusEdY = new(cryptobase.FieldElement)
+	cryptobase.FeSub(oneMinusEdY, &ed.Z, &ed.Y)
+	var invOneMinusEdY = new(cryptobase.FieldElement)
+	cryptobase.FeInvert(invOneMinusEdY, oneMinusEdY)
+	var montX = new(cryptobase.FieldElement)
+	cryptobase.FeMul(montX, edYPlusOne, invOneMinusEdY)
 	p := new([PublicKeySize]byte)
-	internal.FeToBytes(p, montX)
+	cryptobase.FeToBytes(p, montX)
 	copy(pk[:], p[:])
 	return pk
 }
@@ -394,9 +393,9 @@ func GenerateKeyPair(seed []byte) (SecretKey, PublicKey, error) {
 
 func Sign(secretKey SecretKey, data []byte) (Signature, error) {
 	var sig Signature
-	var edPubKeyPoint internal.ExtendedGroupElement
+	var edPubKeyPoint cryptobase.ExtendedGroupElement
 	sk := [SecretKeySize]byte(secretKey)
-	internal.GeScalarMultBase(&edPubKeyPoint, &sk)
+	cryptobase.GeScalarMultBase(&edPubKeyPoint, &sk)
 
 	var edPubKey = new([PublicKeySize]byte)
 	edPubKeyPoint.ToBytes(edPubKey)
@@ -438,9 +437,9 @@ func sign(curvePrivateKey, edPublicKey *[DigestSize]byte, data []byte) ([Signatu
 	h.Sum(messageDigest[:0])
 
 	var messageDigestReduced [32]byte
-	internal.ScReduce(&messageDigestReduced, &messageDigest)
-	var R internal.ExtendedGroupElement
-	internal.GeScalarMultBase(&R, &messageDigestReduced)
+	cryptobase.ScReduce(&messageDigestReduced, &messageDigest)
+	var R cryptobase.ExtendedGroupElement
+	cryptobase.GeScalarMultBase(&R, &messageDigestReduced)
 
 	var encodedR [32]byte
 	R.ToBytes(&encodedR)
@@ -457,10 +456,10 @@ func sign(curvePrivateKey, edPublicKey *[DigestSize]byte, data []byte) ([Signatu
 	}
 	h.Sum(hramDigest[:0])
 	var hramDigestReduced [32]byte
-	internal.ScReduce(&hramDigestReduced, &hramDigest)
+	cryptobase.ScReduce(&hramDigestReduced, &hramDigest)
 
 	var s [32]byte
-	internal.ScMulAdd(&s, &hramDigestReduced, curvePrivateKey, &messageDigestReduced)
+	cryptobase.ScMulAdd(&s, &hramDigestReduced, curvePrivateKey, &messageDigestReduced)
 
 	copy(signature[:], encodedR[:])
 	copy(signature[32:], s[:])
@@ -469,22 +468,22 @@ func sign(curvePrivateKey, edPublicKey *[DigestSize]byte, data []byte) ([Signatu
 
 func Verify(publicKey PublicKey, signature Signature, data []byte) bool {
 	pk := [DigestSize]byte(publicKey)
-	var montX = new(internal.FieldElement)
-	internal.FeFromBytes(montX, &pk)
+	var montX = new(cryptobase.FieldElement)
+	cryptobase.FeFromBytes(montX, &pk)
 
-	var one = new(internal.FieldElement)
-	internal.FeOne(one)
-	var montXMinusOne = new(internal.FieldElement)
-	internal.FeSub(montXMinusOne, montX, one)
-	var montXPlusOne = new(internal.FieldElement)
-	internal.FeAdd(montXPlusOne, montX, one)
-	var invMontXPlusOne = new(internal.FieldElement)
-	internal.FeInvert(invMontXPlusOne, montXPlusOne)
-	var edY = new(internal.FieldElement)
-	internal.FeMul(edY, montXMinusOne, invMontXPlusOne)
+	var one = new(cryptobase.FieldElement)
+	cryptobase.FeOne(one)
+	var montXMinusOne = new(cryptobase.FieldElement)
+	cryptobase.FeSub(montXMinusOne, montX, one)
+	var montXPlusOne = new(cryptobase.FieldElement)
+	cryptobase.FeAdd(montXPlusOne, montX, one)
+	var invMontXPlusOne = new(cryptobase.FieldElement)
+	cryptobase.FeInvert(invMontXPlusOne, montXPlusOne)
+	var edY = new(cryptobase.FieldElement)
+	cryptobase.FeMul(edY, montXMinusOne, invMontXPlusOne)
 
 	var edPubKey = new([PublicKeySize]byte)
-	internal.FeToBytes(edPubKey, edY)
+	cryptobase.FeToBytes(edPubKey, edY)
 
 	edPubKey[31] &= 0x7F
 	edPubKey[31] |= signature[63] & 0x80
@@ -501,12 +500,12 @@ func verify(publicKey *[PublicKeySize]byte, message []byte, sig *[SignatureSize]
 		return false
 	}
 
-	var A internal.ExtendedGroupElement
+	var A cryptobase.ExtendedGroupElement
 	if !A.FromBytes(publicKey) {
 		return false
 	}
-	internal.FeNeg(&A.X, &A.X)
-	internal.FeNeg(&A.T, &A.T)
+	cryptobase.FeNeg(&A.X, &A.X)
+	cryptobase.FeNeg(&A.T, &A.T)
 
 	h := sha512.New()
 	_, _ = h.Write(sig[:32])
@@ -516,19 +515,19 @@ func verify(publicKey *[PublicKeySize]byte, message []byte, sig *[SignatureSize]
 	h.Sum(digest[:0])
 
 	var hReduced [32]byte
-	internal.ScReduce(&hReduced, &digest)
+	cryptobase.ScReduce(&hReduced, &digest)
 
-	var R internal.ProjectiveGroupElement
+	var R cryptobase.ProjectiveGroupElement
 	var s [32]byte
 	copy(s[:], sig[32:])
 
 	// https://tools.ietf.org/html/rfc8032#section-5.1.7 requires that s be in
 	// the range [0, order) in order to prevent signature malleability.
-	if !internal.ScMinimal(&s) {
+	if !cryptobase.ScMinimal(&s) {
 		return false
 	}
 
-	internal.GeDoubleScalarMultVartime(&R, &hReduced, &A, &s)
+	cryptobase.GeDoubleScalarMultVartime(&R, &hReduced, &A, &s)
 
 	var checkR [32]byte
 	R.ToBytes(&checkR)

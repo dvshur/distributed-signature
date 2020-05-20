@@ -1,4 +1,4 @@
-package internal
+package cryptobase
 
 // compare to fe_montx_to_edy
 func FeMontgomeryXToEdwardsY(out, x *FieldElement) {

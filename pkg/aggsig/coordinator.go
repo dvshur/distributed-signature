@@ -2,14 +2,12 @@ package aggsig
 
 import (
 	"crypto/sha512"
-	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand" // not for crypto purposes
 	"sync"
 
-	"github.com/dvshur/distributed-signature/crypto/internal"
-
-	"github.com/wavesplatform/gowaves/pkg/crypto"
+	"github.com/dvshur/distributed-signature/pkg/crypto"
+	"github.com/dvshur/distributed-signature/pkg/cryptobase"
 )
 
 // Coordinator ..
@@ -22,7 +20,7 @@ type Coordinator interface {
 // CoordinatorImpl ..
 type CoordinatorImpl struct {
 	peers     []Peer
-	pubKeysEd map[string]internal.ExtendedGroupElement
+	pubKeysEd map[string]cryptobase.ExtendedGroupElement
 	mux       sync.RWMutex
 }
 
@@ -30,7 +28,7 @@ type CoordinatorImpl struct {
 func NewCoordinator(peers []Peer) Coordinator {
 	return &CoordinatorImpl{
 		peers:     peers,
-		pubKeysEd: make(map[string]internal.ExtendedGroupElement),
+		pubKeysEd: make(map[string]cryptobase.ExtendedGroupElement),
 		mux:       sync.RWMutex{},
 	}
 }
@@ -46,7 +44,7 @@ func (c *CoordinatorImpl) GetPublicKey(clientID string) (crypto.PublicKey, bool)
 // Keygen ..
 func (c *CoordinatorImpl) Keygen(clientID string) (crypto.PublicKey, error) {
 	errors := make(chan error)
-	AA := make(chan internal.ExtendedGroupElement)
+	AA := make(chan cryptobase.ExtendedGroupElement)
 
 	// get all peers Ai
 	for _, p := range c.peers {
@@ -59,7 +57,7 @@ func (c *CoordinatorImpl) Keygen(clientID string) (crypto.PublicKey, error) {
 			AA <- *Ai
 		}(p)
 	}
-	As := make([]internal.ExtendedGroupElement, len(c.peers))
+	As := make([]cryptobase.ExtendedGroupElement, len(c.peers))
 	for i := range c.peers {
 		select {
 		case Ai := <-AA:
@@ -69,9 +67,7 @@ func (c *CoordinatorImpl) Keygen(clientID string) (crypto.PublicKey, error) {
 			return pk, err
 		}
 	}
-	A := SumGeSlice(As)
-
-	fmt.Printf("Got A %v\n", A)
+	A := sumGeSlice(As)
 
 	c.mux.Lock()
 	c.pubKeysEd[clientID] = A
@@ -88,14 +84,14 @@ func (c *CoordinatorImpl) Sign(clientID string, message []byte) (crypto.Signatur
 	A, clientExists := c.pubKeysEd[clientID]
 	c.mux.RUnlock()
 	if !clientExists {
-		return signature, errors.New(fmt.Sprintf("client id %s does not exist", clientID))
+		return signature, fmt.Errorf("client id %s does not exist", clientID)
 	}
 
 	errors := make(chan error)
 	sessionID := randomSessionID()
 
 	// phase1: ask peers for R_i to calculate R
-	RR := make(chan internal.ExtendedGroupElement)
+	RR := make(chan cryptobase.ExtendedGroupElement)
 	for _, p := range c.peers {
 		go func(p Peer) {
 			Ri, err := p.Ri(clientID, sessionID, message)
@@ -106,7 +102,7 @@ func (c *CoordinatorImpl) Sign(clientID string, message []byte) (crypto.Signatur
 			RR <- *Ri
 		}(p)
 	}
-	Rs := make([]internal.ExtendedGroupElement, len(c.peers))
+	Rs := make([]cryptobase.ExtendedGroupElement, len(c.peers))
 	for i := range c.peers {
 		select {
 		case Ri := <-RR:
@@ -115,7 +111,7 @@ func (c *CoordinatorImpl) Sign(clientID string, message []byte) (crypto.Signatur
 			return signature, err
 		}
 	}
-	R := SumGeSlice(Rs)
+	R := sumGeSlice(Rs)
 
 	k, err := calculateK(&R, &A, message)
 	if err != nil {
@@ -123,8 +119,8 @@ func (c *CoordinatorImpl) Sign(clientID string, message []byte) (crypto.Signatur
 	}
 
 	// phase 2: ask peers for S_i to calculate S
-	var S internal.FieldElement
-	SS := make(chan internal.FieldElement)
+	var S cryptobase.FieldElement
+	SS := make(chan cryptobase.FieldElement)
 	for _, p := range c.peers {
 		go func(p Peer) {
 			Si, err := p.Si(clientID, sessionID, k)
@@ -138,18 +134,16 @@ func (c *CoordinatorImpl) Sign(clientID string, message []byte) (crypto.Signatur
 	for range c.peers {
 		select {
 		case Si := <-SS:
-			internal.FeAdd(&S, &S, &Si)
+			cryptobase.FeAdd(&S, &S, &Si)
 		case err := <-errors:
 			return signature, err
 		}
 	}
 
-	fmt.Printf("Got S %v\n", S)
-
 	// serialize R, S to bytes — ed25519 signature
 	var RByte, SByte [32]byte
 	R.ToBytes(&RByte)
-	internal.FeToBytes(&SByte, &S)
+	cryptobase.FeToBytes(&SByte, &S)
 	copy(signature[:], RByte[:])
 	copy(signature[32:], SByte[:])
 
@@ -164,30 +158,30 @@ func (c *CoordinatorImpl) Sign(clientID string, message []byte) (crypto.Signatur
 	return signature, nil
 }
 
-func SumGeSlice(ges []internal.ExtendedGroupElement) internal.ExtendedGroupElement {
-	var res internal.ExtendedGroupElement
+func sumGeSlice(ges []cryptobase.ExtendedGroupElement) cryptobase.ExtendedGroupElement {
+	var res cryptobase.ExtendedGroupElement
 	for i, ge := range ges {
 		if i == 0 {
 			res = ge
 		} else {
-			internal.GeAdd(&res, &res, &ge)
+			cryptobase.GeAdd(&res, &res, &ge)
 		}
 	}
 	return res
 }
 
-func curvePKFromEdPK(ed *internal.ExtendedGroupElement) crypto.PublicKey {
+func curvePKFromEdPK(ed *cryptobase.ExtendedGroupElement) crypto.PublicKey {
 	var pk crypto.PublicKey
-	var edYPlusOne = new(internal.FieldElement)
-	internal.FeAdd(edYPlusOne, &ed.Y, &ed.Z)
-	var oneMinusEdY = new(internal.FieldElement)
-	internal.FeSub(oneMinusEdY, &ed.Z, &ed.Y)
-	var invOneMinusEdY = new(internal.FieldElement)
-	internal.FeInvert(invOneMinusEdY, oneMinusEdY)
-	var montX = new(internal.FieldElement)
-	internal.FeMul(montX, edYPlusOne, invOneMinusEdY)
+	var edYPlusOne = new(cryptobase.FieldElement)
+	cryptobase.FeAdd(edYPlusOne, &ed.Y, &ed.Z)
+	var oneMinusEdY = new(cryptobase.FieldElement)
+	cryptobase.FeSub(oneMinusEdY, &ed.Z, &ed.Y)
+	var invOneMinusEdY = new(cryptobase.FieldElement)
+	cryptobase.FeInvert(invOneMinusEdY, oneMinusEdY)
+	var montX = new(cryptobase.FieldElement)
+	cryptobase.FeMul(montX, edYPlusOne, invOneMinusEdY)
 	p := new([crypto.PublicKeySize]byte)
-	internal.FeToBytes(p, montX)
+	cryptobase.FeToBytes(p, montX)
 	copy(pk[:], p[:])
 	return pk
 }
@@ -202,7 +196,7 @@ func randomSessionID() string {
 	return string(b)
 }
 
-func calculateK(R *internal.ExtendedGroupElement, A *internal.ExtendedGroupElement, data []byte) ([32]byte, error) {
+func calculateK(R *cryptobase.ExtendedGroupElement, A *cryptobase.ExtendedGroupElement, data []byte) ([32]byte, error) {
 	var edPublicKey = new([crypto.PublicKeySize]byte)
 	A.ToBytes(edPublicKey)
 
@@ -223,7 +217,7 @@ func calculateK(R *internal.ExtendedGroupElement, A *internal.ExtendedGroupEleme
 		return k, err
 	}
 	h.Sum(kHash[:0])
-	internal.ScReduce(&k, &kHash)
+	cryptobase.ScReduce(&k, &kHash)
 
 	return k, nil
 }
