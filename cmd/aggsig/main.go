@@ -9,7 +9,7 @@ import (
 	"github.com/dvshur/distributed-signature/pkg/cryptobase"
 )
 
-func randomKey() ([crypto.SecretKeySize]byte, error) {
+func randomSecretKey() ([crypto.SecretKeySize]byte, error) {
 	seed := make([]byte, 32)
 	_, err := rand.Read(seed)
 	if err != nil {
@@ -144,8 +144,8 @@ func main() {
 	message := make([]byte, 4)
 	message = append(message, 1, 1, 1, 1)
 
-	sk1, _ := randomKey()
-	sk2, _ := randomKey()
+	sk1, _ := randomSecretKey()
+	sk2, _ := randomSecretKey()
 
 	// calculate A, ed25519 pub key
 	var A1, A2, A cryptobase.ExtendedGroupElement
