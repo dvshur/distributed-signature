@@ -1,34 +1,41 @@
 package main
 
 import (
-	"github.com/dvshur/distributed-signature/pkg/crypto"
 	"github.com/dvshur/distributed-signature/pkg/peer"
+	"github.com/dvshur/distributed-signature/pkg/server"
 )
 
 func main() {
+	// 1 peer coordinator works
 	p1 := peer.NewLocalPeer()
-	p2 := peer.NewLocalPeer()
-	// p3 := peer.NewLocalPeer()
+	c := peer.NewCoordinator([]peer.Peer{p1})
 
-	c := peer.NewCoordinator([]peer.Peer{p1, p2})
+	server.Create(c).Run("0.0.0.0:8080")
 
-	clientID := "vasya"
+	// pk, err := c.Keygen(clientID)
+	// if err != nil {
+	// 	panic(err)
+	// }
 
-	pk, err := c.Keygen(clientID)
-	if err != nil {
-		panic(err)
-	}
+	// var sig crypto.Signature
+	// for {
+	// 	sig, err = c.Sign(clientID, message)
+	// 	if err != nil {
+	// 		panic(err)
+	// 	}
+	// 	if crypto.Verify(pk, sig, message) {
+	// 		break
+	// 	}
+	// }
 
-	message := []byte{1, 2, 3}
+	// sig, err := c.Sign(clientID, message)
+	// if err != nil {
+	// 	panic(err)
+	// }
 
-	sig, err := c.Sign(clientID, message)
-	if err != nil {
-		panic(err)
-	}
-
-	if crypto.Verify(pk, sig, message) {
-		println("Cool, verified")
-	} else {
-		println("Failed")
-	}
+	// if crypto.Verify(pk, sig, message) {
+	// 	println("Cool, verified")
+	// } else {
+	// 	println("Failed")
+	// }
 }

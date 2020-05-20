@@ -14,7 +14,7 @@ import (
 type Coordinator interface {
 	Keygen(clientID string) (crypto.PublicKey, error)
 	Sign(clientID string, message []byte) (crypto.Signature, error)
-	GetPublicKey(clientID string) (crypto.PublicKey, bool)
+	GetPublicKey(clientID string) (crypto.PublicKey, bool) // todo error
 }
 
 // CoordinatorImpl ..
