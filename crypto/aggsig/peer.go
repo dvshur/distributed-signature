@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/sha512"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -28,52 +27,61 @@ type keyPair struct {
 type PeerLocal struct {
 	keys       map[string]keyPair
 	sessionsRi map[string][32]byte
-	mux        sync.Mutex
+	mux        sync.RWMutex
 }
 
+// NewLocalPeer ..
 func NewLocalPeer() Peer {
 	return &PeerLocal{
 		keys:       make(map[string]keyPair),
 		sessionsRi: make(map[string][32]byte),
-		mux:        sync.Mutex{},
+		mux:        sync.RWMutex{},
 	}
 }
 
 // Ai ..
 func (p *PeerLocal) Ai(clientID string) (*internal.ExtendedGroupElement, error) {
-	if kp, ok := p.keys[clientID]; ok {
+	p.mux.RLock()
+	kp, ok := p.keys[clientID]
+	p.mux.RUnlock()
+
+	if ok {
 		return &kp.Ai, nil
-	} else {
-		sk, err := randomKey()
-
-		if err != nil {
-			return nil, err
-		}
-		var Ai internal.ExtendedGroupElement
-		internal.GeScalarMultBase(&Ai, &sk)
-
-		kp.Ai = Ai
-		kp.SecretKey = sk
-
-		p.mux.Lock()
-		p.keys[clientID] = kp
-		p.mux.Unlock()
-
-		return &Ai, nil
 	}
+
+	sk, err := randomKey()
+	if err != nil {
+		return nil, err
+	}
+
+	var Ai internal.ExtendedGroupElement
+	internal.GeScalarMultBase(&Ai, &sk)
+
+	kp.Ai = Ai
+	kp.SecretKey = sk
+
+	p.mux.Lock()
+	p.keys[clientID] = kp
+	p.mux.Unlock()
+
+	fmt.Printf("Ai: %v, sk: %v\n", kp.Ai, kp.SecretKey)
+
+	return &Ai, nil
 }
 
 // Ri ..
-// todo do I need a mutex lock for reads?
-// assuming for now that I don't
 func (p *PeerLocal) Ri(clientID string, sessionID string, message []byte) (*internal.ExtendedGroupElement, error) {
+	p.mux.RLock()
 	kp, clientExists := p.keys[clientID]
+	p.mux.RUnlock()
 
 	if !clientExists {
-		return nil, errors.New(fmt.Sprint("client id %s does not exist", clientID))
+		return nil, fmt.Errorf("client id %s does not exist", clientID)
 	}
 
+	p.mux.RLock()
 	ri, sessionExists := p.sessionsRi[sessionID]
+	p.mux.RUnlock()
 
 	if !sessionExists {
 		var prefix = bytes.Repeat([]byte{0xff}, 32)
@@ -101,8 +109,7 @@ func (p *PeerLocal) Ri(clientID string, sessionID string, message []byte) (*inte
 		}
 		h.Sum(rHash[:0])
 
-		var r [32]byte
-		internal.ScReduce(&r, &rHash)
+		internal.ScReduce(&ri, &rHash)
 
 		p.mux.Lock()
 		p.sessionsRi[sessionID] = ri
@@ -119,14 +126,19 @@ func (p *PeerLocal) Ri(clientID string, sessionID string, message []byte) (*inte
 
 // Si ..
 func (p *PeerLocal) Si(clientID string, sessionID string, k [32]byte) (*internal.FieldElement, error) {
+	p.mux.RLock()
 	kp, clientExists := p.keys[clientID]
+	p.mux.RUnlock()
+
 	if !clientExists {
-		return nil, errors.New(fmt.Sprint("client id %s does not exist", clientID))
+		return nil, fmt.Errorf("client id %s does not exist", clientID)
 	}
 
+	p.mux.RLock()
 	ri, sessionExists := p.sessionsRi[sessionID]
+	p.mux.RUnlock()
 	if !sessionExists {
-		return nil, errors.New(fmt.Sprint("session id %s does not exist", sessionID))
+		return nil, fmt.Errorf("session id %s does not exist", sessionID)
 	}
 
 	var s [32]byte

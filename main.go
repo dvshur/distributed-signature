@@ -8,10 +8,10 @@ import (
 
 func main() {
 	p1 := aggsig.NewLocalPeer()
-	p2 := aggsig.NewLocalPeer()
-	p3 := aggsig.NewLocalPeer()
+	// p2 := aggsig.NewLocalPeer()
+	// p3 := aggsig.NewLocalPeer()
 
-	c := aggsig.NewCoordinator([]aggsig.Peer{p1, p2, p3})
+	c := aggsig.NewCoordinator([]aggsig.Peer{p1})
 
 	clientID := "vasya"
 
@@ -20,7 +20,7 @@ func main() {
 		panic(err)
 	}
 
-	message := []byte{1, 2, 3, 4}
+	message := []byte{1, 2, 3}
 
 	sig, err := c.Sign(clientID, message)
 	if err != nil {

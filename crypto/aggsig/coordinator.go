@@ -23,7 +23,7 @@ type Coordinator interface {
 type CoordinatorImpl struct {
 	peers     []Peer
 	pubKeysEd map[string]internal.ExtendedGroupElement
-	mux       sync.Mutex
+	mux       sync.RWMutex
 }
 
 // NewCoordinator ..
@@ -31,13 +31,15 @@ func NewCoordinator(peers []Peer) Coordinator {
 	return &CoordinatorImpl{
 		peers:     peers,
 		pubKeysEd: make(map[string]internal.ExtendedGroupElement),
-		mux:       sync.Mutex{},
+		mux:       sync.RWMutex{},
 	}
 }
 
 // GetPublicKey ..
 func (c *CoordinatorImpl) GetPublicKey(clientID string) (crypto.PublicKey, bool) {
+	c.mux.RLock()
 	A, ok := c.pubKeysEd[clientID]
+	c.mux.RUnlock()
 	return curvePKFromEdPK(&A), ok
 }
 
@@ -57,17 +59,19 @@ func (c *CoordinatorImpl) Keygen(clientID string) (crypto.PublicKey, error) {
 			AA <- *Ai
 		}(p)
 	}
-
-	var A internal.ExtendedGroupElement
-	for range c.peers {
+	As := make([]internal.ExtendedGroupElement, len(c.peers))
+	for i := range c.peers {
 		select {
 		case Ai := <-AA:
-			internal.GeAdd(&A, &A, &Ai)
+			As[i] = Ai
 		case err := <-errors:
 			var pk crypto.PublicKey
 			return pk, err
 		}
 	}
+	A := SumGeSlice(As)
+
+	fmt.Printf("Got A %v\n", A)
 
 	c.mux.Lock()
 	c.pubKeysEd[clientID] = A
@@ -80,20 +84,20 @@ func (c *CoordinatorImpl) Keygen(clientID string) (crypto.PublicKey, error) {
 func (c *CoordinatorImpl) Sign(clientID string, message []byte) (crypto.Signature, error) {
 	var signature crypto.Signature
 
+	c.mux.RLock()
 	A, clientExists := c.pubKeysEd[clientID]
+	c.mux.RUnlock()
 	if !clientExists {
-		return signature, errors.New(fmt.Sprint("client id %s does not exist", clientID))
+		return signature, errors.New(fmt.Sprintf("client id %s does not exist", clientID))
 	}
 
 	errors := make(chan error)
 	sessionID := randomSessionID()
 
 	// phase1: ask peers for R_i to calculate R
-	var R internal.ExtendedGroupElement
 	RR := make(chan internal.ExtendedGroupElement)
 	for _, p := range c.peers {
 		go func(p Peer) {
-			fmt.Println("p, %v", p)
 			Ri, err := p.Ri(clientID, sessionID, message)
 			if err != nil {
 				errors <- err
@@ -102,15 +106,16 @@ func (c *CoordinatorImpl) Sign(clientID string, message []byte) (crypto.Signatur
 			RR <- *Ri
 		}(p)
 	}
-	for range c.peers {
+	Rs := make([]internal.ExtendedGroupElement, len(c.peers))
+	for i := range c.peers {
 		select {
 		case Ri := <-RR:
-			fmt.Println("Got Ri, %v", Ri)
-			internal.GeAdd(&R, &R, &Ri)
+			Rs[i] = Ri
 		case err := <-errors:
 			return signature, err
 		}
 	}
+	R := SumGeSlice(Rs)
 
 	k, err := calculateK(&R, &A, message)
 	if err != nil {
@@ -133,12 +138,13 @@ func (c *CoordinatorImpl) Sign(clientID string, message []byte) (crypto.Signatur
 	for range c.peers {
 		select {
 		case Si := <-SS:
-			fmt.Println("Got Si, %v", Si)
 			internal.FeAdd(&S, &S, &Si)
 		case err := <-errors:
 			return signature, err
 		}
 	}
+
+	fmt.Printf("Got S %v\n", S)
 
 	// serialize R, S to bytes — ed25519 signature
 	var RByte, SByte [32]byte
@@ -156,6 +162,18 @@ func (c *CoordinatorImpl) Sign(clientID string, message []byte) (crypto.Signatur
 	signature[63] |= signBit
 
 	return signature, nil
+}
+
+func SumGeSlice(ges []internal.ExtendedGroupElement) internal.ExtendedGroupElement {
+	var res internal.ExtendedGroupElement
+	for i, ge := range ges {
+		if i == 0 {
+			res = ge
+		} else {
+			internal.GeAdd(&res, &res, &ge)
+		}
+	}
+	return res
 }
 
 func curvePKFromEdPK(ed *internal.ExtendedGroupElement) crypto.PublicKey {
