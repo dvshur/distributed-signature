@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/dvshur/distributed-signature/pkg/crypto"
 	"github.com/dvshur/distributed-signature/pkg/peer"
 	"github.com/gin-gonic/gin"
 	"github.com/mr-tron/base58"
@@ -25,7 +26,8 @@ type httpSign struct {
 	Data string `json:"data"`
 }
 
-const failedParseClientId = "Failed to parse client ID from JWT"
+const failedParseClientId = "Failed to parse client ID from JWT."
+const noSuchClient = "You have not passed a keygen stage yet."
 
 // Create ..
 func Create(coord peer.Coordinator) *gin.Engine {
@@ -58,7 +60,7 @@ func Create(coord peer.Coordinator) *gin.Engine {
 
 		pk, ok := coord.GetPublicKey(clientID)
 		if !ok {
-			c.JSON(http.StatusNotFound, httpErr{Error: "You do not have a public key yet."})
+			c.JSON(http.StatusNotFound, httpErr{Error: noSuchClient})
 			return
 		}
 
@@ -91,7 +93,22 @@ func Create(coord peer.Coordinator) *gin.Engine {
 			return
 		}
 
-		sig, err := coord.Sign(clientID, message)
+		// todo remove when crypto is stable
+		pk, ok := coord.GetPublicKey(clientID)
+		if !ok {
+			c.JSON(http.StatusNotFound, httpErr{Error: noSuchClient})
+			return
+		}
+
+		var sig crypto.Signature
+		for {
+			sig, err = coord.Sign(clientID, message)
+			if err != nil || crypto.Verify(pk, sig, message) {
+				break
+			}
+		}
+		// ...and uncomment this
+		// sig, err = coord.Sign(clientID, message)
 
 		if err != nil {
 			fmt.Println(err)
