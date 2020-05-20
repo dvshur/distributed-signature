@@ -20,7 +20,7 @@ func randomKey() ([crypto.SecretKeySize]byte, error) {
 	return crypto.GenerateSecretKey(seed[:]), nil
 }
 
-// CalcR, returns ri, Ri, error
+// CalcR returns Ri, ri
 func CalcR(sk *[32]byte, data []byte) (cryptobase.ExtendedGroupElement, [32]byte, error) {
 	var R cryptobase.ExtendedGroupElement
 	var r [32]byte
@@ -56,7 +56,7 @@ func CalcR(sk *[32]byte, data []byte) (cryptobase.ExtendedGroupElement, [32]byte
 	return R, r, nil
 }
 
-// CalcK ..
+// CalcK returns k
 func CalcK(R, A *cryptobase.ExtendedGroupElement, data []byte) ([32]byte, error) {
 	var edPublicKey = new([crypto.PublicKeySize]byte)
 	A.ToBytes(edPublicKey)
@@ -83,7 +83,7 @@ func CalcK(R, A *cryptobase.ExtendedGroupElement, data []byte) ([32]byte, error)
 	return k, nil
 }
 
-// CalcS ..
+// CalcS returns Si
 func CalcS(k, si, ri *[32]byte) *cryptobase.FieldElement {
 	var s [32]byte
 	cryptobase.ScMulAdd(&s, k, si, ri)
@@ -94,33 +94,42 @@ func CalcS(k, si, ri *[32]byte) *cryptobase.FieldElement {
 	return &S
 }
 
-// CreateSig ..
-func CreateSig(R *cryptobase.ExtendedGroupElement, Ss ...*cryptobase.FieldElement) crypto.Signature {
-	var signature [64]byte
-
-	// calc S = S0 + ... + Sn
+// SumFE returns a sum of provided FieldElements
+func SumFE(elements ...*cryptobase.FieldElement) cryptobase.FieldElement {
 	var S cryptobase.FieldElement
-	for _, Si := range Ss {
+	for _, Si := range elements {
 		cryptobase.FeAdd(&S, &S, Si)
 	}
+	return S
+}
 
-	// serialize sig to bytes
-	var RByte, SByte [32]byte
+// CurveSigFromEd creates a Curve25519 signature from A, R and S
+func CurveSigFromEd(A, R *cryptobase.ExtendedGroupElement, S *cryptobase.FieldElement) crypto.Signature {
+	var AByte, RByte, SByte [32]byte
+	A.ToBytes(&AByte)
 	R.ToBytes(&RByte)
-	cryptobase.FeToBytes(&SByte, &S)
+	cryptobase.FeToBytes(&SByte, S)
 
+	// this gets us an ed25519 sig, R || S
+	var signature [64]byte
 	copy(signature[:], RByte[:])
 	copy(signature[32:], SByte[:])
+
+	// this transforms an ed25519 to a Curve25519 sig
+	signBit := AByte[31] & 0x80
+	signature[63] &= 0x7f
+	signature[63] |= signBit
 
 	return signature
 }
 
-func CurvePKFromEdPK(ed *cryptobase.ExtendedGroupElement) crypto.PublicKey {
+// CurvePKFromEdPK transforms an ed25519 public key, A, to a Curve25519 public key
+func CurvePKFromEdPK(A *cryptobase.ExtendedGroupElement) crypto.PublicKey {
 	var pk crypto.PublicKey
 	var edYPlusOne = new(cryptobase.FieldElement)
-	cryptobase.FeAdd(edYPlusOne, &ed.Y, &ed.Z)
+	cryptobase.FeAdd(edYPlusOne, &A.Y, &A.Z)
 	var oneMinusEdY = new(cryptobase.FieldElement)
-	cryptobase.FeSub(oneMinusEdY, &ed.Z, &ed.Y)
+	cryptobase.FeSub(oneMinusEdY, &A.Z, &A.Y)
 	var invOneMinusEdY = new(cryptobase.FieldElement)
 	cryptobase.FeInvert(invOneMinusEdY, oneMinusEdY)
 	var montX = new(cryptobase.FieldElement)
@@ -158,29 +167,14 @@ func main() {
 	S1 := CalcS(&k, &sk1, &r1)
 	// S2 := CalcS(&k, &sk2, &rr2.RSecret)
 
-	signatureEd := CreateSig(&R, S1)
+	S := SumFE(S1)
 
-	// for verification
-	var publicKeyEd = new([crypto.PublicKeySize]byte)
-	A.ToBytes(publicKeyEd)
-
-	signBit := publicKeyEd[31] & 0x80
-
-	// transform sig?
-	var signatureCurve [64]byte
-	copy(signatureCurve[:], signatureEd[:])
-	signatureCurve[63] &= 0x7f
-	signatureCurve[63] |= signBit
-
+	signatureCurve := CurveSigFromEd(&A, &R, &S)
 	publicKeyCurve := CurvePKFromEdPK(&A)
 
-	// signatureValid := crypto.Verify(pk, sigValid, message)
-
-	signatureValid := crypto.Verify(publicKeyCurve, signatureCurve, message)
-
-	if signatureValid {
-		println("Cool, verified")
+	if crypto.Verify(publicKeyCurve, signatureCurve, message) {
+		println("Signature verified.")
 	} else {
-		println("Failed")
+		println("Verification failed.")
 	}
 }
