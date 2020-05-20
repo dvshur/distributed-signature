@@ -1,9 +1,21 @@
 package aggsig
 
 import (
-	"distributed-sig/crypto/internal"
+	"crypto/rand"
 	"testing"
+
+	"github.com/dvshur/distributed-signature/crypto/internal"
 )
+
+func randomGE() internal.ExtendedGroupElement {
+	r := make([]byte, 32)
+	rand.Read(r)
+	var r2 [32]byte
+	copy(r2[:], r[:32])
+	var R internal.ExtendedGroupElement
+	R.FromBytes(&r2)
+	return R
+}
 
 // Coordinator ..
 func TestSumGeSlice(t *testing.T) {
@@ -17,18 +29,15 @@ func TestSumGeSlice(t *testing.T) {
 	}
 
 	// slice size 1
-	r1, _ := randomKey()
-	var R1 internal.ExtendedGroupElement
-	internal.GeScalarMultBase(&R1, &r1)
+	R1 := randomGE()
 	actualR = SumGeSlice([]internal.ExtendedGroupElement{R1})
 	if actualR != R1 {
 		t.Errorf("Slice size 1 incorrect result, got: %d, want: %d", actualR, R1)
 	}
 
 	// slice size 2
-	r2, _ := randomKey()
 	var expectedR, R2 internal.ExtendedGroupElement
-	internal.GeScalarMultBase(&R2, &r2)
+	R2 = randomGE()
 	internal.GeAdd(&expectedR, &R1, &R2)
 
 	actualR = SumGeSlice([]internal.ExtendedGroupElement{R1, R2})

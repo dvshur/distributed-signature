@@ -7,7 +7,7 @@ import (
 	"math/rand"
 	"sync"
 
-	"distributed-sig/crypto/internal"
+	"github.com/dvshur/distributed-signature/crypto/internal"
 
 	"github.com/wavesplatform/gowaves/pkg/crypto"
 )

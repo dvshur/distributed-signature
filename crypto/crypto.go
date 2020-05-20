@@ -9,7 +9,7 @@ import (
 	"hash"
 	"strings"
 
-	"distributed-sig/crypto/internal"
+	"github.com/dvshur/distributed-signature/crypto/internal"
 
 	"github.com/mr-tron/base58/base58"
 	"github.com/pkg/errors"

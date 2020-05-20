@@ -1,4 +1,4 @@
-module distributed-sig
+module github.com/dvshur/distributed-signature
 
 go 1.14
 

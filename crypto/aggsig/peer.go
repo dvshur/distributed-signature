@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"sync"
 
-	"distributed-sig/crypto"
-	"distributed-sig/crypto/internal"
+	"github.com/dvshur/distributed-signature/crypto"
+
+	"github.com/dvshur/distributed-signature/crypto/internal"
 )
 
 // Peer ..
@@ -49,10 +50,13 @@ func (p *PeerLocal) Ai(clientID string) (*internal.ExtendedGroupElement, error) 
 		return &kp.Ai, nil
 	}
 
-	sk, err := randomKey()
+	// generate secret key
+	seed := make([]byte, 32)
+	_, err := rand.Read(seed)
 	if err != nil {
 		return nil, err
 	}
+	sk := [32]byte(crypto.GenerateSecretKey(seed))
 
 	var Ai internal.ExtendedGroupElement
 	internal.GeScalarMultBase(&Ai, &sk)
@@ -148,17 +152,4 @@ func (p *PeerLocal) Si(clientID string, sessionID string, k [32]byte) (*internal
 	internal.FeFromBytes(&S, &s)
 
 	return &S, nil
-}
-
-func randomKey() ([crypto.SecretKeySize]byte, error) {
-	var sk crypto.SecretKey
-
-	sk1 := make([]byte, 32)
-	_, err := rand.Read(sk1)
-	if err != nil {
-		return sk, err
-	}
-
-	copy(sk[:], sk1)
-	return sk, nil
 }

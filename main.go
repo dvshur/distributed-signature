@@ -1,7 +1,7 @@
 package main
 
 import (
-	"distributed-sig/crypto/aggsig"
+	"github.com/dvshur/distributed-signature/crypto/aggsig"
 
 	"github.com/wavesplatform/gowaves/pkg/crypto"
 )
