@@ -10,28 +10,21 @@ import (
 	"github.com/wavesplatform/gowaves/pkg/crypto"
 )
 
-// RandomKey ..
-func RandomKey() ([crypto.SecretKeySize]byte, error) {
-	var sk crypto.SecretKey
-
-	sk1 := make([]byte, 32)
-	_, err := rand.Read(sk1)
+func randomKey() ([crypto.SecretKeySize]byte, error) {
+	seed := make([]byte, 32)
+	_, err := rand.Read(seed)
 	if err != nil {
+		var sk crypto.SecretKey
 		return sk, err
 	}
 
-	copy(sk[:], sk1)
-	return sk, nil
+	return crypto.GenerateSecretKey(seed[:]), nil
 }
 
-type RR struct {
-	R       internal.ExtendedGroupElement
-	RSecret [32]byte
-}
-
-// CalcRR, returns ri, Ri, error
-func CalcRR(sk *[32]byte, data []byte) (*RR, error) {
+// CalcR, returns ri, Ri, error
+func CalcR(sk *[32]byte, data []byte) (internal.ExtendedGroupElement, [32]byte, error) {
 	var R internal.ExtendedGroupElement
+	var r [32]byte
 
 	var prefix = bytes.Repeat([]byte{0xff}, 32)
 	prefix[0] = 0xfe
@@ -39,37 +32,33 @@ func CalcRR(sk *[32]byte, data []byte) (*RR, error) {
 	random := make([]byte, 64)
 	_, err := rand.Read(random)
 	if err != nil {
-		return nil, err
+		return R, r, err
 	}
 
 	var rHash [64]byte
 	h := sha512.New()
 	if _, err := h.Write(prefix); err != nil {
-		return nil, err
+		return R, r, err
 	}
 	if _, err := h.Write(sk[:]); err != nil {
-		return nil, err
+		return R, r, err
 	}
 	if _, err := h.Write(data); err != nil {
-		return nil, err
+		return R, r, err
 	}
 	if _, err := h.Write(random[:]); err != nil {
-		return nil, err
+		return R, r, err
 	}
 	h.Sum(rHash[:0])
 
-	var r [32]byte
 	internal.ScReduce(&r, &rHash)
 	internal.GeScalarMultBase(&R, &r)
 
-	return &RR{
-		R:       R,
-		RSecret: r,
-	}, nil
+	return R, r, nil
 }
 
 // CalcK ..
-func CalcK(R *internal.ExtendedGroupElement, A *internal.ExtendedGroupElement, data []byte) ([32]byte, error) {
+func CalcK(R, A *internal.ExtendedGroupElement, data []byte) ([32]byte, error) {
 	var edPublicKey = new([crypto.PublicKeySize]byte)
 	A.ToBytes(edPublicKey)
 
@@ -96,7 +85,7 @@ func CalcK(R *internal.ExtendedGroupElement, A *internal.ExtendedGroupElement, d
 }
 
 // CalcS ..
-func CalcS(k *[32]byte, si *[32]byte, ri *[32]byte) *internal.FieldElement {
+func CalcS(k, si, ri *[32]byte) *internal.FieldElement {
 	var s [32]byte
 	internal.ScMulAdd(&s, k, si, ri)
 
@@ -147,7 +136,7 @@ func main() {
 	message := make([]byte, 4)
 	message = append(message, 1, 1, 1, 1)
 
-	sk1, _ := RandomKey()
+	sk1, _ := randomKey()
 	// sk2, _ := RandomKey()
 
 	// calculate A, ed25519 pub key
@@ -157,17 +146,17 @@ func main() {
 	internal.GeScalarMultBase(&A, &sk1)
 	// internal.GeAdd(&A, &A1, &A2)
 
-	// generate r_i
-	rr1, _ := CalcRR(&sk1, message)
+	// generate Ri, ri
+	R1, r1, _ := CalcR(&sk1, message)
 	// rr2, _ := CalcRR(&sk2, message)
 
 	var R internal.ExtendedGroupElement
-	R = rr1.R
-	// internal.GeAdd(&R, &rr1.R, &rr2.R)
+	R = R1
+	// internal.GeAdd(&R, &R1, &R2)
 
 	k, _ := CalcK(&R, &A, message)
 
-	S1 := CalcS(&k, &sk1, &rr1.RSecret)
+	S1 := CalcS(&k, &sk1, &r1)
 	// S2 := CalcS(&k, &sk2, &rr2.RSecret)
 
 	signatureEd := CreateSig(&R, S1)
@@ -176,29 +165,19 @@ func main() {
 	var publicKeyEd = new([crypto.PublicKeySize]byte)
 	A.ToBytes(publicKeyEd)
 
-	// signBit := publicKeyEd[31] & 0x80
+	signBit := publicKeyEd[31] & 0x80
 
-	// // transform sig?
+	// transform sig?
 	var signatureCurve [64]byte
 	copy(signatureCurve[:], signatureEd[:])
-	// signatureCurve[63] &= 0x7f
-	// signatureCurve[63] |= signBit
+	signatureCurve[63] &= 0x7f
+	signatureCurve[63] |= signBit
 
-	// publicKeyCurve := CurvePKFromEdPK(&A)
+	publicKeyCurve := CurvePKFromEdPK(&A)
 
-	seed, _ := RandomKey()
-	sk := crypto.GenerateSecretKey(seed[:])
+	// signatureValid := crypto.Verify(pk, sigValid, message)
 
-	sk01 := [crypto.SecretKeySize]byte(sk)
-	var A0 internal.ExtendedGroupElement
-	internal.GeScalarMultBase(&A0, &sk01)
-	pk := CurvePKFromEdPK(&A0)
-
-	sigValid, _ := crypto.Sign(sk, message)
-
-	signatureValid := crypto.Verify(pk, sigValid, message)
-
-	// signatureValid := crypto.Verify(publicKeyCurve, signatureCurve, message)
+	signatureValid := crypto.Verify(publicKeyCurve, signatureCurve, message)
 
 	if signatureValid {
 		println("Cool, verified")
