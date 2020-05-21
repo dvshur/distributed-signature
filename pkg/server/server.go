@@ -30,7 +30,7 @@ type httpSign struct {
 	Data string `json:"data"`
 }
 
-const failedParseClientId = "Failed to parse client ID from JWT."
+const failedParseClientID = "Failed to parse client ID from JWT."
 const noSuchClient = "You have not passed a keygen stage yet."
 
 // Create ..
