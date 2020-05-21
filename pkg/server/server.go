@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/cognitoidentityprovider"
 	"github.com/dvshur/distributed-signature/pkg/crypto"
 	"github.com/dvshur/distributed-signature/pkg/peer"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/mr-tron/base58"
 )
@@ -39,6 +40,10 @@ func Create(coord peer.Coordinator) *gin.Engine {
 	r := gin.Default()
 	// gin.DisableConsoleColor()
 	// r.Use(gin.Recovery(), accessLog(logger))
+
+	config := cors.DefaultConfig()
+	config.AllowOrigins = []string{"*"}
+	r.Use(cors.New(config))
 
 	conf := &aws.Config{Region: aws.String("us-east-2")}
 	sess, err := session.NewSession(conf)
