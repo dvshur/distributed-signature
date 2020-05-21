@@ -43,6 +43,11 @@ func (c *CoordinatorImpl) GetPublicKey(clientID string) (crypto.PublicKey, bool)
 
 // Keygen ..
 func (c *CoordinatorImpl) Keygen(clientID string) (crypto.PublicKey, error) {
+	pk, clientExists := c.GetPublicKey(clientID)
+	if clientExists {
+		return pk, nil
+	}
+
 	errors := make(chan error)
 	AA := make(chan cryptobase.ExtendedGroupElement)
 
@@ -63,7 +68,6 @@ func (c *CoordinatorImpl) Keygen(clientID string) (crypto.PublicKey, error) {
 		case Ai := <-AA:
 			As[i] = Ai
 		case err := <-errors:
-			var pk crypto.PublicKey
 			return pk, err
 		}
 	}
