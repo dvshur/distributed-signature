@@ -55,6 +55,8 @@ github.com/hnakamur/zap-ltsv v0.0.0-20170731143423-10a3dd1d839c h1:fMBledu2Jwuhe
 github.com/hnakamur/zap-ltsv v0.0.0-20170731143423-10a3dd1d839c/go.mod h1:OIeMUc48Jh1XT7GOXJ2l0tK3+vFq+yqWJ2gPVz0YHEI=
 github.com/howeyc/gopass v0.0.0-20190910152052-7cb4b85ec19c/go.mod h1:lADxMC39cJJqL93Duh1xhAs4I2Zs8mKS89XWXFGp9cs=
 github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpOxQnU=
+github.com/itsjamie/gin-cors v0.0.0-20160420130702-97b4a9da7933 h1:USSH71GEMLF/yxfkbDMvmklaimVh9cXbBVcQZ4AgJPE=
+github.com/itsjamie/gin-cors v0.0.0-20160420130702-97b4a9da7933/go.mod h1:AYdLvrSBFloDBNt7Y8xkQ6gmhCODGl8CPikjyIOnNzA=
 github.com/jinzhu/copier v0.0.0-20190625015134-976e0346caa8/go.mod h1:yL958EeXv8Ylng6IfnvG4oflryUi3vgA3xPs9hmII1s=
 github.com/jmespath/go-jmespath v0.3.0 h1:OS12ieG61fsCg5+qLJ+SsW9NicxNkg3b25OyT2yCeUc=
 github.com/jmespath/go-jmespath v0.3.0/go.mod h1:9QtRXoHjLGCJ5IBSaohpXITPlowMeeYCZ7fLUTSywik=

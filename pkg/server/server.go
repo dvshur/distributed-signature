@@ -3,14 +3,15 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cognitoidentityprovider"
 	"github.com/dvshur/distributed-signature/pkg/crypto"
 	"github.com/dvshur/distributed-signature/pkg/peer"
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	cors "github.com/itsjamie/gin-cors"
 	"github.com/mr-tron/base58"
 )
 
@@ -41,12 +42,22 @@ func Create(coord peer.Coordinator) *gin.Engine {
 	// gin.DisableConsoleColor()
 	// r.Use(gin.Recovery(), accessLog(logger))
 
-	// CORS
-	config := cors.DefaultConfig()
-	config.AllowAllOrigins = true
-	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
-	config.AllowCredentials = true
-	r.Use(cors.New(config))
+	// // CORS
+	// config := cors.DefaultConfig()
+	// config.AllowAllOrigins = true
+	// config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
+	// config.AllowCredentials = true
+	// r.Use(cors.New(config))
+
+	r.Use(cors.Middleware(cors.Config{
+		Origins:         "*",
+		Methods:         "GET, PUT, POST, DELETE",
+		RequestHeaders:  "Origin, Authorization, Content-Type",
+		ExposedHeaders:  "",
+		MaxAge:          50 * time.Second,
+		Credentials:     true,
+		ValidateHeaders: false,
+	}))
 
 	conf := &aws.Config{Region: aws.String("us-east-2")}
 	sess, err := session.NewSession(conf)
