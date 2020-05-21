@@ -41,7 +41,12 @@ func Create(coord peer.Coordinator) *gin.Engine {
 	// gin.DisableConsoleColor()
 	// r.Use(gin.Recovery(), accessLog(logger))
 
-	r.Use(cors.Default())
+	// CORS
+	config := cors.DefaultConfig()
+	config.AllowAllOrigins = true
+	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
+	config.AllowCredentials = true
+	r.Use(cors.New(config))
 
 	conf := &aws.Config{Region: aws.String("us-east-2")}
 	sess, err := session.NewSession(conf)
