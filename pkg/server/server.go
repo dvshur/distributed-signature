@@ -72,7 +72,7 @@ func Create(coord peer.Coordinator) *gin.Engine {
 
 		pk, ok := coord.GetPublicKey(clientID)
 		if !ok {
-			c.JSON(http.StatusNotFound, httpErr{Error: noSuchClient})
+			c.JSON(http.StatusNoContent, httpErr{Error: noSuchClient})
 			return
 		}
 
@@ -107,7 +107,7 @@ func Create(coord peer.Coordinator) *gin.Engine {
 		// todo remove when crypto is stable
 		pk, ok := coord.GetPublicKey(clientID)
 		if !ok {
-			c.JSON(http.StatusNotFound, httpErr{Error: noSuchClient})
+			c.JSON(http.StatusBadRequest, httpErr{Error: noSuchClient})
 			return
 		}
 
