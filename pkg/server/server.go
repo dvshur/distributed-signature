@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/cognitoidentityprovider"
 	"github.com/dvshur/distributed-signature/pkg/crypto"
 	"github.com/dvshur/distributed-signature/pkg/peer"
 	"github.com/gin-gonic/gin"
@@ -37,10 +40,19 @@ func Create(coord peer.Coordinator) *gin.Engine {
 	// gin.DisableConsoleColor()
 	// r.Use(gin.Recovery(), accessLog(logger))
 
+	conf := &aws.Config{Region: aws.String("us-east-2")}
+	sess, err := session.NewSession(conf)
+	if err != nil {
+		panic(err)
+	}
+	c := cognitoidentityprovider.New(sess)
+
+	identity := NewIdentityManager(c)
+
 	r.PUT("/keygen", func(c *gin.Context) {
-		clientID, err := getClientID(c.Request)
+		clientID, status, err := identity.ClientID(c.Request)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, httpErr{Error: failedParseClientId})
+			c.JSON(status, httpErr{Error: err.Error()})
 			return
 		}
 
@@ -52,9 +64,9 @@ func Create(coord peer.Coordinator) *gin.Engine {
 
 		c.JSON(http.StatusOK, httpPk{PublicKey: pk.String()})
 	}).GET("/pubkey", func(c *gin.Context) {
-		clientID, err := getClientID(c.Request)
+		clientID, status, err := identity.ClientID(c.Request)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, httpErr{Error: failedParseClientId})
+			c.JSON(status, httpErr{Error: err.Error()})
 			return
 		}
 
@@ -66,8 +78,14 @@ func Create(coord peer.Coordinator) *gin.Engine {
 
 		c.JSON(http.StatusOK, httpPk{PublicKey: pk.String()})
 	}).POST("/sign", func(c *gin.Context) {
+		clientID, status, err := identity.ClientID(c.Request)
+		if err != nil {
+			c.JSON(status, httpErr{Error: err.Error()})
+			return
+		}
+
 		var req httpSign
-		err := c.BindJSON(&req)
+		err = c.BindJSON(&req)
 		if err != nil {
 			fmt.Println(err)
 			c.JSON(http.StatusBadRequest, httpErr{Error: "Failed to parse request body."})
@@ -76,13 +94,6 @@ func Create(coord peer.Coordinator) *gin.Engine {
 
 		if req.Data == "" {
 			c.JSON(http.StatusBadRequest, httpErr{Error: "Empty data."})
-			return
-		}
-
-		clientID, err := getClientID(c.Request)
-		if err != nil {
-			fmt.Println(err)
-			c.JSON(http.StatusBadRequest, httpErr{Error: failedParseClientId})
 			return
 		}
 
