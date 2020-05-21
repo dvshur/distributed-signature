@@ -29,6 +29,10 @@ type httpSign struct {
 	Data string `json:"data"`
 }
 
+type httpOk struct {
+	Ok bool `json:"ok"`
+}
+
 const failedParseClientID = "Failed to parse client ID from JWT."
 const noSuchClient = "You have not passed a keygen stage yet."
 
@@ -128,6 +132,8 @@ func Create(coord peer.Coordinator) *gin.Engine {
 		}
 
 		c.JSON(http.StatusOK, httpSig{Signature: sig.String()})
+	}).GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, httpOk{Ok: true})
 	})
 
 	return r
