@@ -96,10 +96,19 @@ func CalcS(k, si, ri *[32]byte) *cryptobase.FieldElement {
 
 // SumFE returns a sum of provided FieldElements
 func SumFE(elements ...*cryptobase.FieldElement) cryptobase.FieldElement {
-	var S cryptobase.FieldElement
+	var SByte [32]byte
+	var SiByte [32]byte
+
+	var one [32]byte
+	one[0] = 1
+
 	for _, Si := range elements {
-		cryptobase.FeAdd(&S, &S, Si)
+		cryptobase.FeToBytes(&SiByte, Si)
+		cryptobase.ScMulAdd(&SByte, &one, &SByte, &SiByte)
 	}
+
+	var S cryptobase.FieldElement
+	cryptobase.FeFromBytes(&S, &SByte)
 	return S
 }
 

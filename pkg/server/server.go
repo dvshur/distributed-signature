@@ -7,7 +7,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cognitoidentityprovider"
-	"github.com/dvshur/distributed-signature/pkg/crypto"
 	"github.com/dvshur/distributed-signature/pkg/peer"
 	"github.com/gin-gonic/gin"
 	"github.com/mr-tron/base58"
@@ -88,6 +87,12 @@ func Create(coord peer.Coordinator) *gin.Engine {
 			return
 		}
 
+		_, ok := coord.GetPublicKey(clientID)
+		if !ok {
+			c.JSON(http.StatusBadRequest, httpErr{Error: noSuchClient})
+			return
+		}
+
 		var req httpSign
 		err = c.BindJSON(&req)
 		if err != nil {
@@ -108,22 +113,7 @@ func Create(coord peer.Coordinator) *gin.Engine {
 			return
 		}
 
-		// todo remove when crypto is stable
-		pk, ok := coord.GetPublicKey(clientID)
-		if !ok {
-			c.JSON(http.StatusBadRequest, httpErr{Error: noSuchClient})
-			return
-		}
-
-		var sig crypto.Signature
-		for {
-			sig, err = coord.Sign(clientID, message)
-			if err != nil || crypto.Verify(pk, sig, message) {
-				break
-			}
-		}
-		// ...and uncomment this
-		// sig, err = coord.Sign(clientID, message)
+		sig, err := coord.Sign(clientID, message)
 
 		if err != nil {
 			fmt.Println(err)

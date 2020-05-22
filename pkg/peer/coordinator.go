@@ -71,13 +71,31 @@ func (c *CoordinatorImpl) Keygen(clientID string) (crypto.PublicKey, error) {
 			return pk, err
 		}
 	}
-	A := sumGeSlice(As)
+	A := sumGe(As)
 
 	c.mux.Lock()
 	c.pubKeysEd[clientID] = A
 	c.mux.Unlock()
 
 	return curvePKFromEdPK(&A), nil
+}
+
+// sumFEModL ...
+func sumFEModL(elements []*cryptobase.FieldElement) cryptobase.FieldElement {
+	var SByte [32]byte
+	var SiByte [32]byte
+
+	var one [32]byte
+	one[0] = 1
+
+	for _, Si := range elements {
+		cryptobase.FeToBytes(&SiByte, Si)
+		cryptobase.ScMulAdd(&SByte, &one, &SByte, &SiByte)
+	}
+
+	var S cryptobase.FieldElement
+	cryptobase.FeFromBytes(&S, &SByte)
+	return S
 }
 
 // Sign ..
@@ -115,7 +133,7 @@ func (c *CoordinatorImpl) Sign(clientID string, message []byte) (crypto.Signatur
 			return signature, err
 		}
 	}
-	R := sumGeSlice(Rs)
+	R := sumGe(Rs)
 
 	k, err := calculateK(&R, &A, message)
 	if err != nil {
@@ -123,7 +141,6 @@ func (c *CoordinatorImpl) Sign(clientID string, message []byte) (crypto.Signatur
 	}
 
 	// phase 2: ask peers for S_i to calculate S
-	var S cryptobase.FieldElement
 	SS := make(chan cryptobase.FieldElement)
 	for _, p := range c.peers {
 		go func(p Peer) {
@@ -135,14 +152,16 @@ func (c *CoordinatorImpl) Sign(clientID string, message []byte) (crypto.Signatur
 			SS <- *Si
 		}(p)
 	}
-	for range c.peers {
+	Ss := make([]*cryptobase.FieldElement, len(c.peers))
+	for i := range c.peers {
 		select {
 		case Si := <-SS:
-			cryptobase.FeAdd(&S, &S, &Si)
+			Ss[i] = &Si
 		case err := <-errors:
 			return signature, err
 		}
 	}
+	S := sumFEModL(Ss)
 
 	// serialize R, S to bytes — ed25519 signature
 	var RByte, SByte [32]byte
@@ -162,7 +181,7 @@ func (c *CoordinatorImpl) Sign(clientID string, message []byte) (crypto.Signatur
 	return signature, nil
 }
 
-func sumGeSlice(ges []cryptobase.ExtendedGroupElement) cryptobase.ExtendedGroupElement {
+func sumGe(ges []cryptobase.ExtendedGroupElement) cryptobase.ExtendedGroupElement {
 	var res cryptobase.ExtendedGroupElement
 	for i, ge := range ges {
 		if i == 0 {

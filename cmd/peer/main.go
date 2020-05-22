@@ -6,10 +6,10 @@ import (
 )
 
 func main() {
-	// 1 peer coordinator works
 	p1 := peer.NewLocalPeer()
 	p2 := peer.NewLocalPeer()
-	c := peer.NewCoordinator([]peer.Peer{p1, p2})
+	p3 := peer.NewLocalPeer()
+	c := peer.NewCoordinator([]peer.Peer{p1, p2, p3})
 
 	server.Create(c).Run("0.0.0.0:8080")
 }
